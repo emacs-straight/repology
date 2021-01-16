@@ -1,0 +1,3 @@
+*.elc
+/repology-pkg.el
+/repology-autoloads.el
