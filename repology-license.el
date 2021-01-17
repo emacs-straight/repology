@@ -43,6 +43,7 @@
 (defconst repology-license-reference-repositories
   '(("debian"    "main"     t)
     ("debian"    "contrib"  t)
+    ("^mageia"   "core"     t)
     ("gnuguix"   nil        t)
     ("hyperbola" nil        t)
     ("parabola"  nil        t)
@@ -53,6 +54,7 @@
     ("^gentoo"   nil        repology--license-check:gentoo)
     ("^opensuse" "/oss"     repology--license-check:opensuse-oss)
     ("debian"    "non-free" nil)
+    ("^mageia"   "nonfree"  nil)
     ("^opensuse" "/non-oss" nil))
   "List of repositories providing a reliable license information.
 
