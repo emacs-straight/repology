@@ -845,11 +845,10 @@ from output, unless `repology-free-only-projects' is nil."
                       (`(,(and (pred repology-project-p) project))
                        (concat (repology-project-name project) "-"))
                       (other (error "Invalid request result: %S" other))))))))))
-    ;; Possibly keep only non projects.
+    ;; Possibly keep only free projects.
     (if repology-free-only-projects
         (with-temp-message "Repology: Filtering out non-free projects..."
-          (seq-filter (lambda (project) (repology-free-p project))
-                      result))
+          (seq-filter #'repology-free-p result))
       result)))
 
 (defun repology-report-problems (repository)
