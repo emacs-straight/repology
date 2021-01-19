@@ -19,32 +19,14 @@
 
 ;;; Commentary:
 
-;; This library provides various tools used throughout the code base.  It
-;; includes accessors and predicates for packages, projects and problems
-;; objects.  It also provides functions useful in configuration variables.
-;; Eventually, it implements `repology-request'.
+;; This library provides various user-facing tools.  They include accessors and
+;; predicates for package, project and problem objects, in addition to more
+;; specialized functions useful in configuration variables.
+
+;; The library also provides the low-level `repology-request', used to
+;; perform a raw HTTP request on a given URL.
 
 ;;; Code:
-
-
-;;; Macro
-
-;; XXX: We need it to be a macro because it is required early, e.g.,
-;; in `repology-display-packages-columns'.
-(defmacro repology-display-sort-column (name predicate)
-  "Return a function comparing entries in column NAME.
-NAME is a string.  Compare entries using function PREDICATE, called on two
-objects of the column."
-  `(lambda (e1 e2)
-     (let ((column
-            ;; Find column's number
-            (or (seq-position tabulated-list-format
-                              ,name
-                              (pcase-lambda (`(,n . ,_) s) (equal n s)))
-                (error "Invalid column name %S" ,name))))
-       (let ((s1 (elt (cadr e1) column))
-             (s2 (elt (cadr e2) column)))
-         (funcall ,predicate s1 s2)))))
 
 
 ;;; Packages
@@ -179,7 +161,7 @@ Versions are sorted in descending order."
     (sort (mapcar (lambda (p) (repology-package-field p 'version))
                   outdated)
           ;; Return versions in decreasing order.
-          (lambda (s1 s2) (repology-compare-versions s2 s1)))))
+          (lambda (s1 s2) (repology-version-< s2 s1)))))
 
 
 ;;; Problems
@@ -321,7 +303,7 @@ the request."
 (defun repology--string-to-version (s)
   "Return version associated to string S.
 Version is a list of components (RANK . VALUE) suitable for comparison, with
-the function `repology-compare-versions'."
+the function `repology-version-<'."
   (let ((split nil))
     ;; Explode string into numeric and alphabetic components.
     ;; Intermediate SPLIT result is in reverse order.
@@ -361,11 +343,11 @@ the function `repology-compare-versions'."
           (push (cons rank component) result)))
       result)))
 
-(defun repology-compare-versions (s1 s2)
-  "Compare package versions associated to strings S1 and S2.
-Return t if version S1 is lower than version S2."
-  (let ((v1 (repology--string-to-version s1))
-        (v2 (repology--string-to-version s2)))
+(defun repology-version-< (v1 v2)
+  "Return t if version V1 is lower (older) than version V2.
+V1 and V2 are strings."
+  (let ((v1 (repology--string-to-version v1))
+        (v2 (repology--string-to-version v2)))
     (catch :less?
       (while (or v1 v2)
         (pcase-let ((`(,r1 . ,v1)
@@ -383,20 +365,43 @@ Return t if version S1 is lower than version S2."
            ;; comparing their first letters.
            (t (throw :less?
                      (string-lessp (substring v1 0 1) (substring v2 0 1)))))))
-      ;; Strings S1 and S2 represent equal versions.
+      ;; Strings V1 and V2 represent equal versions.
       nil)))
 
 
-;;; Other Comparisons
-(defun repology-compare-texts (s1 s2)
-  "Compare strings S1 and S2 in collation order.
-Return t if S1 is less than S2.  Case is ignored."
-  (string-collate-lessp s1 s2 nil t))
+;;; Sort Functions
+(defun repology--display-sort-generic (e1 e2 predicate)
+  "Compare entries E1 and E2 according to PREDICATE.
+E1 and E2 are elements of `tabulated-list-entries'.  PREDICATE is called on the
+values from E1 and E2 at the column being sorted."
+  (let ((column
+         ;; Find number of column being sorted.
+         (seq-position tabulated-list-format
+                       (car tabulated-list-sort-key)
+                       (pcase-lambda (`(,n . ,_) s) (equal n s)))))
+    ;; Call PREDICATE on values instead of entries.
+    (let ((val1 (elt (cadr e1) column))
+          (val2 (elt (cadr e2) column)))
+      (funcall predicate val1 val2))))
 
-(defun repology-compare-numbers (s1 s2)
-  "Compare strings S1 and S2 numerically.
-Return t if S1 is less than S2."
-  (< (string-to-number s1) (string-to-number s2)))
+(defun repology-display-sort-numbers (e1 e2)
+  "Return t if E1 is numerically less than E2.
+E1 and E2 are elements of `tabulated-list-entries'."
+  (repology--display-sort-generic
+   e1 e2
+   (lambda (s1 s2) (< (string-to-number s1) (string-to-number s2)))))
+
+(defun repology-display-sort-texts (e1 e2)
+  "Return t if E1 is before E2, in collation order.
+E1 and E2 are elements of `tabulated-list-entries'.  Case is ignored."
+  (repology--display-sort-generic
+   e1 e2
+   (lambda (s1 s2) (string-collate-lessp s1 s2 nil t))))
+
+(defun repology-display-sort-versions (e1 e2)
+  "Return t if E1 is older than E2.
+E1 and E2 are elements of `tabulated-list-entries'."
+  (repology--display-sort-generic e1 e2 #'repology-version-<))
 
 
 (provide 'repology-utils)
