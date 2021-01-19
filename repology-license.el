@@ -118,28 +118,29 @@ This list is populated with `repology--license-get-identifiers:gentoo'.")
 
 (defun repology--license-get-identifiers:gentoo ()
   "Return list of free license identifiers according to Gentoo."
-  (unless repology--license-identifiers:gentoo
-    (with-temp-message "Repology: Fetching license identifiers for Gentoo..."
-      (let ((request
-              (repology-request repology--license-identifiers-url:gentoo)))
-        (pcase (plist-get request :reason)
-          ("OK"
-           (let ((identifiers nil))
-             (with-temp-buffer
-               (insert (plist-get request :body))
-               (dolist (category repology--license-categories:gentoo)
-                 (goto-char 1)
-                 (when (re-search-forward (concat "^" category " +"))
-                   (let ((line (buffer-substring (point) (line-end-position))))
-                     (setq identifiers
-                           (nconc (split-string line) identifiers)))))
-               (dolist (category repology--license-categories:gentoo)
-                 (setq identifiers (delete (concat "@" category) identifiers))))
-             (setq repology--license-identifiers:gentoo identifiers)))
-          (_
-           (message
-            "Repology: Cannot fetch Gentoo licenses.  \
-Ignoring repository")))))))
+  (or repology--license-identifiers:gentoo
+      (with-temp-message "Repology: Fetching license identifiers for Gentoo..."
+        (let ((request
+                (repology-request repology--license-identifiers-url:gentoo)))
+          (pcase (plist-get request :reason)
+            ("OK"
+             (let ((identifiers nil))
+               (with-temp-buffer
+                 (insert (plist-get request :body))
+                 (dolist (category repology--license-categories:gentoo)
+                   (goto-char 1)
+                   (when (re-search-forward (concat "^" category " +"))
+                     (let ((l (buffer-substring (point) (line-end-position))))
+                       (setq identifiers
+                             (nconc (split-string l) identifiers)))))
+                 (dolist (category repology--license-categories:gentoo)
+                   (setq identifiers
+                         (delete (concat "@" category) identifiers))))
+               (setq repology--license-identifiers:gentoo identifiers)))
+            (_
+             (message "Repology: Cannot fetch Gentoo licenses.  \
+Ignoring repository")
+             nil))))))
 
 (defun repology--license-gentoo:skip-whitespace ()
   "Skip past the whitespace at point."
@@ -225,7 +226,8 @@ Ignoring repository")))))))
         (while (and value (/= (repology--license-gentoo:peek) 0))
           (unless (repology--license-gentoo:read-next)
             (setq value nil)))
-        value))))
+        ;; Return a boolean.
+        (and value t)))))
 
 
 ;;; Reference Repository: OpenSUSE (OSS)
@@ -298,7 +300,15 @@ REPOSITORY is an element from `repology-license-reference-repositories'.
 PACKAGE is a package object."
   (pcase (or repository (repology--license-find-reference-repository package))
     (`(,_ ,_ ,(and (pred functionp) p))
-     (seq-every-p p (repology-package-field package 'licenses)))
+     (catch :vote
+       (dolist (l (repology-package-field package 'licenses))
+         ;; For a vote to be "Free", every license string must be
+         ;; free.  However, we stop at first "Unknown" or "Non-Free"
+         ;; result.
+         (pcase (funcall p l)
+           ('t nil)
+           (other (throw :vote other))))
+       t))
     (`(,_ ,_ ,boolean) boolean)
     (other (error "Wrong repository definition: %S" other))))
 
