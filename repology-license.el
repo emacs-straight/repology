@@ -2,6 +2,8 @@
 
 ;; Copyright (C) 2021  Free Software Foundation, Inc.
 
+;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
+
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
@@ -17,26 +19,20 @@
 
 ;;; Commentary:
 
-;; This library provides the `repology-free-p' function, which returns
-;; a non-nil value when a package or a project can be considered as
-;; free.
+;; This library provides the `repology-check-freedom' function, which returns
+;; t when a package or a project can be considered as free, nil it is
+;; identified as being non-free, and `unknown' otherwise.
 
-;; The decision is made by polling a number of "Reference
-;; repositories", defined in `repology-license-reference-repositories'.
-;; If the ratio of "Free" votes is equal or above
-;; `repology-license-poll-threshold', the project is declared as free.
+;; The decision is made by polling a number of "Reference repositories",
+;; defined in `repology-license-reference-repositories'.  If the ratio of
+;; "Free" votes is above `repology-license-poll-threshold', the project is
+;; declared as free.
 
-;; In order to see the results of each vote, and possibly debug the
-;; process, you can set `repology-license-debug' to a non-nil value.
+;; In order to see the results of each vote, and possibly debug the process,
+;; you can set `repology-license-debug' to a non-nil value.
 
 ;;; Code:
-
-(declare-function repology-request "repology" (url &optional extra-headers))
-(declare-function repology-package-field "repology" (package field))
-(declare-function repology-project-name "repology" (project))
-(declare-function repology-package-p "repology" (object))
-(declare-function repology-project-p "repology" (object))
-(declare-function repology-project-packages "repology" (project))
+(require 'repology-utils)
 
 
 ;;; Constants
@@ -51,7 +47,7 @@
     ("trisquel"  nil        t)
     ("gnu_elpa"  nil        t)
     ("^fedora"   nil        repology--license-check:fedora)
-    ("^gentoo"   nil        repology--license-check:gentoo)
+    ("^gentoo$"  nil        repology--license-check:gentoo)
     ("^opensuse" "/oss"     repology--license-check:opensuse-oss)
     ("debian"    "non-free" nil)
     ("^mageia"   "nonfree"  nil)
@@ -94,10 +90,11 @@ properties:
 
 ;;; Tools
 (defun repology--license-interpret-vote (free votes)
-  "Return freedom vote result as a boolean.
+  "Return freedom vote result as nil, t or `unknown'.
 FREE is the number of \"Free\" votes.  VOTES is the total number of votes."
-  (and (> votes 0)
-       (> (/ (float free) votes) repology-license-poll-threshold)))
+  (cond ((= votes 0) 'unknown)
+        ((> (/ (float free) votes) repology-license-poll-threshold) t)
+        (t nil)))
 
 
 ;;; Reference Repository: Fedora
@@ -248,9 +245,10 @@ See URL `https://en.opensuse.org/openSUSE:Packaging_guidelines#Licensing'."
   "When non-nil, display explanations when a project declared non-free.
 Information is displayed in \"*Repology: License Debug*\" buffer.")
 
-(defun repology--license-debug-line (package free)
+(defun repology--license-debug-line (package freedom)
   "Format license debug information for PACKAGE.
-When FREE is non-nil, declare PACKAGE was reported as free."
+When FREEDOM is t, declare PACKAGE was reported as free.  If it is nil,
+declare it as non-free.  Otherwise report an unknown status."
   (let ((repo (repology-package-field package 'repo))
         (subrepo (repology-package-field package 'subrepo))
         (name (repology-package-field package 'visiblename)))
@@ -258,7 +256,10 @@ When FREE is non-nil, declare PACKAGE was reported as free."
             name
             repo
             (if subrepo (concat "/" subrepo) "")
-            (if free "Free" "Non-Free"))))
+            (pcase freedom
+              ('unknown "Unknown")
+              ('nil "Non-Free")
+              (_ "Free")))))
 
 (defun repology--license-debug-display (project reports free votes)
   "Print license check output for non-free PROJECT.
@@ -268,9 +269,10 @@ from reference repositories in PROJECT."
   (with-current-buffer (get-buffer-create "*Repology: License Debug*")
     (insert (format "=== Project %S: %s (ratio: %.2f) ===\n"
                     (repology-project-name project)
-                    (if (repology--license-interpret-vote free votes)
-                        "FREE"
-                      "NON-FREE")
+                    (pcase (repology--license-interpret-vote free votes)
+                      ('unknown "UNKNOWN")
+                      ('nil "NON-FREE")
+                      (_ "FREE"))
                     (if (= votes 0)
                         0
                       (/ (float free) votes))))
@@ -290,18 +292,18 @@ Return value is a triplet from `repology-license-reference-repositories'."
                          (and subrepo (string-match s subrepo)))))
               repology-license-reference-repositories)))
 
-(defun repology--license-check (package repository)
-  "Check if PACKAGE is free according to REPOSITORY.
+(defun repology--license-vote (repository package)
+  "Return REPOSITORY vote concerning PACKAGE freedom.
 REPOSITORY is an element from `repology-license-reference-repositories'.
-PACKAGE is free when REPOSITORY can attest it uses only free licenses."
+PACKAGE is a package object."
   (pcase (or repository (repology--license-find-reference-repository package))
     (`(,_ ,_ ,(and (pred functionp) p))
      (seq-every-p p (repology-package-field package 'licenses)))
     (`(,_ ,_ ,boolean) boolean)
     (other (error "Wrong repository definition: %S" other))))
 
-(defun repology-free-p (datum)
-  "Return t when project or package DATUM is free.
+(defun repology-check-freedom (object)
+  "Return t when project or package OBJECT is free.
 
 A package is free when any reference repository can attest it uses only free
 licenses.  See `repology-license-reference-repositories' for a list of such
@@ -309,43 +311,43 @@ repositories.  If the package does not belong to any of these repositories,
 or if there is not enough information to decide, return `unknown'.  Otherwise,
 return nil.
 
-A project is free if the ratio of free packages among the packages from
-reference repositories is above `repology-license-poll-threshold'.
-In any other case, return nil.  In particular, a project without any package
-from reference repositories is declared non-free.
+A project is free if the ratio of free packages among the packages in project
+from reference repositories is above `repology-license-poll-threshold'.
+If the project does not contain any package from such repositories, or if those
+repositories cannot decide, return `unknown'.  In any other case, return nil.
 
 Of course, it is not a legal statement, merely an indication."
-  (pcase datum
+  (pcase object
     ((pred repology-package-p)
-     (pcase (repology--license-find-reference-repository datum)
+     (pcase (repology--license-find-reference-repository object)
        ('nil 'unknown)
        (repository
-        (let ((decision (repology--license-check datum repository)))
+        (let ((decision (repology--license-vote repository object)))
           (if (booleanp decision) decision 'unknown)))))
     ((pred repology-project-p)
      (let ((votes 0)
            (yes 0)
            (reports nil)
            (voters nil))
-       (dolist (package (repology-project-packages datum))
+       (dolist (package (repology-project-packages object))
          (pcase (repology--license-find-reference-repository package)
            ('nil nil)
            (repository
             (unless (member repository voters)
-              (cl-incf votes)
               (push repository voters)  ;a repository votes only once
-              (let ((free (repology--license-check package repository)))
+              (let ((free (repology--license-vote repository package)))
                 (when (booleanp free)   ;has repository an opinion?
+                  (cl-incf votes)
                   (when free (cl-incf yes))
                   (when repology-license-debug
                     (push (repology--license-debug-line package free)
                           reports))))))))
        ;; Maybe display vote reports as debugging information.
        (when repology-license-debug
-         (repology--license-debug-display datum reports yes votes))
+         (repology--license-debug-display object reports yes votes))
        ;; Return value.
        (repology--license-interpret-vote yes votes)))
-    (_ (user-error "Wrong argument type: %S" datum))))
+    (_ (user-error "Wrong argument type: %S" object))))
 
 (provide 'repology-license)
 ;;; repology-license.el ends here
