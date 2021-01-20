@@ -209,18 +209,18 @@ the repositories with their full name instead of their internal name."
           ("OK"
            (let ((body (plist-get request :body))
                  (repositories nil)
-                 (start 0))
-             (while (string-match "id=\"\\(.+?\\)\"" body start)
+                 (start 0)
+                 (internal-re (rx "id=\"" (group (+? nonl)) "\""))
+                 (full-re (rx "href=\"/repository/"
+                              (+? anychar)
+                              "\">"
+                              (group (+? anychar))
+                              "<")))
+             (while (string-match internal-re body start)
                (setq start (match-end 0))
                (let* ((repo (match-string 1 body))
-                      (regexp
-                       (rx "href=\"/repository/"
-                           (+? anychar)
-                           "\">"
-                           (group (+? anychar))
-                           "<"))
                       (true-name
-                       (and (string-match regexp body start)
+                       (and (string-match full-re body start)
                             (match-string 1 body))))
                  (push (cons repo true-name) repositories)))
              (setq repology--repositories (nreverse repositories))))
@@ -275,9 +275,9 @@ the request."
                  (header nil)
                  (body nil))
             (forward-line)
-            (while (looking-at "^\\([^:]+\\): \\(.*\\)")
+            (while (looking-at (rx line-start (group (+? nonl)) ": "))
               (push (match-string 1) header)
-              (push (match-string 2) header)
+              (push (buffer-substring (match-end 0) (line-end-position)) header)
               (forward-line))
             (forward-line)
             (unless (eobp)

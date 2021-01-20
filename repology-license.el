@@ -129,10 +129,11 @@ This list is populated with `repology--license-get-identifiers:gentoo'.")
                  (insert (plist-get request :body))
                  (dolist (category repology--license-categories:gentoo)
                    (goto-char 1)
-                   (when (re-search-forward (concat "^" category " +"))
-                     (let ((l (buffer-substring (point) (line-end-position))))
-                       (setq identifiers
-                             (nconc (split-string l) identifiers)))))
+                   (let ((regexp (rx line-start (literal category) (+ space))))
+                     (when (re-search-forward regexp)
+                       (let ((l (buffer-substring (point) (line-end-position))))
+                         (setq identifiers
+                               (nconc (split-string l) identifiers))))))
                  (dolist (category repology--license-categories:gentoo)
                    (setq identifiers
                          (delete (concat "@" category) identifiers))))

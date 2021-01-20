@@ -472,8 +472,8 @@ FILTERS helps refining the search with the following keywords:
   `has_related'
      return projects which have related ones (may require merging)
 
-Return a list of projects.  Projects with a known non-free license are removed
-from output, unless `repology-free-only-projects' is nil."
+Return a list of projects.  Non-free projects may be removed from output
+according to the value of `repology-free-only-projects'."
   (let ((result nil)
         (name nil))
     (with-temp-message "Repology: Querying API..."
