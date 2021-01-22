@@ -180,7 +180,7 @@ Un-handled status values are associated to the `default' face."
     ("Package name" visiblename 20 t)
     ("Problem" type 40 t)
     ("Maintainer" maintainers 30 nil))
-  "Columns format rules used to display a list of packages.
+  "Columns format rules used to display a list of problems.
 
 The value is an association list.  Each entry has the form
 
