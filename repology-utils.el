@@ -104,6 +104,16 @@ Return PACKAGE's repository internal name if the full name is unknown."
     (or (ignore-errors (repology-repository-full-name repo))
         repo)))
 
+(defun repology--package-status-face (package)
+  "Return face associated to status from PACKAGE."
+  (let ((status (repology-package-field package 'status)))
+    (if (member status repology-package-all-status)
+        (intern (format "repology-%s-status" status))
+      ;; If package status list is not up-to-date, fall back to
+      ;; `default' face.
+      (warn "Repology: Unknown package status: %S; Using `default' face" other)
+      'default)))
+
 (defun repology-package-colorized-status (package)
   "Return colorized status string for PACKAGE.
 The version string is emphasized according to PACKAGE's status.
@@ -114,8 +124,7 @@ Return nil if PACKAGE has no status field."
 
 (defun repology-package-colorized-version (package)
   "Return colorized version string for PACKAGE.
-The version string is emphasized according to PACKAGE's status.
-See `repology-status-faces'."
+The version string is emphasized according to PACKAGE's status."
   (propertize (repology-package-field package 'version)
               'face
               (repology--package-status-face package)))

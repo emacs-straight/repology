@@ -36,7 +36,7 @@
 ;;
 ;; By default, only projects recognized as free are included in the search
 ;; results.  You can control this behavior with the variable
-;; `repology-free-only-projects'.  The function `repology-check-freedom'
+;; `repology-free-projects-only'.  The function `repology-check-freedom'
 ;; is responsible for guessing if a project, or a package, is free.
 
 ;; You can then access data from those various objects using dedicated
@@ -47,12 +47,12 @@
 ;; You can also decide to display (a subset of) results in a tabulated
 ;; list.  See `repology-display-package', `repology-display-packages',
 ;; `repology-display-projects' and `repology-display-problems'.  You
-;; can control various aspects of the display, like the colors used
-;; (see `repology-status-faces'), or the columns shown (see
-;; `repology-display-packages-columns',`repology-display-projects-columns',
-;; and `repology-display-problems-columns').  When projects or packages
-;; are displayed, pressing <RET> gives you more information about the item
-;; at point, whereas pressing <F> reports their "freedom" status.
+;; can control various aspects of the display, like the faces used
+;; or the columns shown (see `repology-display-packages-columns',
+;; `repology-display-projects-columns' and `repology-display-problems-columns').
+;; When projects or packages are displayed, pressing <RET> gives you more
+;; information about the item at point, whereas pressing <F> reports their
+;; freedom status.
 
 ;; For example, the following expression displays all outdated projects
 ;; named after "emacs" and containing a package in GNU Guix repository
@@ -135,7 +135,7 @@ Repology claims to update its repository hourly.
 A value of 0 prevents any caching."
   :type 'integer)
 
-(defcustom repology-free-only-projects t
+(defcustom repology-free-projects-only t
   "When t, return only free projects from searches.
 
 Declaring a project as free the consequence of a very conservative process.
@@ -151,29 +151,6 @@ See `repology-check-freedom' for more information."
           (const :tag "Only free projects" t)
           (const :tag "Free and unknown projects" include-unknown)
           (const :tag "Every project" nil)))
-
-(defcustom repology-status-faces
-  '(("incorrect" . error)
-    ("newest" . highlight)
-    ("outdated" . warning)
-    ("noscheme" . shadow)
-    ("untrusted" . shadow)
-    ("ignored" . shadow))
-  "Association list of status values and faces.
-
-Each entry is a construct like (STATUS . FACE) where STATUS is
-a possible package status value, as detailed in `repology-package-field',
-and FACE is the face to be applied by `repology-package-colorize-status'
-and `repology-package-colorize-version'.
-
-Un-handled status values are associated to the `default' face."
-  :type
-  `(repeat
-    (cons :tag "Association"
-          (choice :tag "Status"
-                  ,@(mapcar (lambda (status) `(const ,status))
-                            repology-package-all-status))
-          face)))
 
 (defcustom repology-display-problems-columns
   `(("Project" effname 20 t)
@@ -270,6 +247,51 @@ You may also want to look into comparison functions suitable for SORT, such as
                          (const :tag "Sort" t)
                          (function :tag "Custom sort predicate"))))
           (function :tag "Function describing columns")))
+
+
+;;; Faces
+(defgroup repology-faces nil
+  "Faces for Repology"
+  :group 'repology)
+
+(defface repology-free '((t :inherit success))
+  "Face for free packages or projects.")
+
+(defface repology-non-free '((t :inherit warning))
+  "Face for non-free packages or projects.")
+
+(defface repology-unknown '((t :inherit default))
+  "Face for packages or projects with unknown freedom status.")
+
+(defface repology-devel-status '((t :inherit italic))
+  "Face for \"devel\" status.")
+
+(defface repology-ignored-status '((t :inherit shadow))
+  "Face for \"ignored\" status.")
+
+(defface repology-incorrect-status '((t :inherit error))
+  "Face for \"incorrect\" status.")
+
+(defface repology-legacy-status '((t :inherit default))
+  "Face for \"legacy\" status.")
+
+(defface repology-newest-status '((t :inherit success))
+  "Face for \"newest\" status.")
+
+(defface repology-noscheme-status '((t :inherit shadow))
+  "Face for \"noscheme\" status.")
+
+(defface repology-outdated-status '((t :inherit warning))
+  "Face for \"outdated\" status.")
+
+(defface repology-rolling-status '((t :inherit italic))
+  "Face for \"rolling\" status.")
+
+(defface repology-unique-status '((t :inherit default))
+  "Face for \"unique\" status.")
+
+(defface repology-untrusted-status '((t :inherit shadow))
+  "Face for \"untrusted\" status.")
 
 
 ;;; Global Internal Variables
@@ -473,7 +495,7 @@ FILTERS helps refining the search with the following keywords:
      return projects which have related ones (may require merging)
 
 Return a list of projects.  Non-free projects may be removed from output
-according to the value of `repology-free-only-projects'."
+according to the value of `repology-free-projects-only'."
   (let ((result nil)
         (name nil))
     (with-temp-message "Repology: Querying API..."
@@ -499,9 +521,9 @@ according to the value of `repology-free-only-projects'."
                       (`(,(and (pred repology-project-p) project))
                        (concat (repology-project-name project) "-"))
                       (other (error "Invalid request result: %S" other))))))))))
-    (if (not repology-free-only-projects) result
+    (if (not repology-free-projects-only) result
       (with-temp-message "Repology: Filtering out non-free projects..."
-        (seq-filter (if (eq repology-free-only-projects 'include-unknown)
+        (seq-filter (if (eq repology-free-projects-only 'include-unknown)
                         #'repology-check-freedom
                       (lambda (p) (eq t (repology-check-freedom p))))
                     result)))))
@@ -544,9 +566,9 @@ REPOSITORY is a string.  Return a list of problems."
   (interactive)
   (message "Freedom status: %s"
            (pcase (repology-check-freedom (tabulated-list-get-id))
-             ('unknown (propertize "Unknown" 'face 'shadow))
-             ('nil (propertize "Non-Free" 'face 'warning))
-             (_ (propertize "Free" 'face 'highlight)))))
+             ('unknown (propertize "Unknown" 'face 'repology-unknown))
+             ('nil (propertize "Non-Free" 'face 'repology-non-free))
+             (_ (propertize "Free" 'face 'repology-free)))))
 
 (defun repology--show-current-project ()
   "Display packages associated to project at point."
@@ -595,11 +617,6 @@ REPOSITORY is a string.  Return a list of problems."
                 " "))
     (_
      (format "%s" value))))
-
-(defun repology--package-status-face (package)
-  "Return face associated to status from PACKAGE."
-  (let ((status (repology-package-field package 'status)))
-    (alist-get status repology-status-faces 'default nil #'equal)))
 
 (defun repology--make-display (data buffer-name mode format-descriptors)
   "Display DATA in a buffer named after BUFFER-NAME string.
