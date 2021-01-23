@@ -62,7 +62,8 @@ This is a list of triplets (REPO SUBREPO PREDICATE) where:
 
 When PREDICATE is a function, a return value of t means the argument is a free
 license according to the repository, whereas nil means it is non-free.  Any
-other value means the repository cannot decide, and pass.
+other value means the repository cannot decide, and pass.  In this case, the
+vote does not count.
 
 If PREDICATE is t, we trust the repository to provide only free software.
 Conversely, PREDICATE is nil when the repository is known to reference only

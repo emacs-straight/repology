@@ -363,7 +363,7 @@ reset the cache and return nil."
   (puthash key (cons (current-time) value) repology--cache))
 
 (defun repology--parse-json (json-string)
-  "Parse a JSON string and returns an object.
+  "Parse JSON-STRING and return an object.
 JSON objects become alists and JSON arrays become lists."
   (if (null json-string)
       nil
@@ -392,7 +392,9 @@ JSON objects become alists and JSON arrays become lists."
 
 (defun repology--build-url (action value start)
   "Build a URL from an ACTION symbol.
-Value is a plist if ACTION is `projects', or a string otherwise."
+VALUE is a plist if ACTION is `projects', or a string otherwise.
+START is a string or nil.  When it is a string and ACTION is `projects',
+ask Repology to only return projects alphabetically after it."
   (concat repology-base-url
           (symbol-name action)
           "/"
@@ -406,11 +408,8 @@ Value is a plist if ACTION is `projects', or a string otherwise."
 
 (defun repology--get (action value start)
   "Perform an HTTP GET request to Repology API.
-
-ACTION is a symbol.  If it is `projects', VALUE is a plist and START a string.
-Otherwise, VALUE is a string, and START is nil.
-
-Information is returned as parsed JSON."
+ACTION, VALUE, and START are arguments passed to `repology--build-url',
+which see.  Information is returned as parsed JSON."
   (let ((key (repology--cache-key action value start)))
     (or (repology--cache-get key)
         (let ((request
