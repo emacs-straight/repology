@@ -1,4 +1,4 @@
-;;; repology-utils.el --- Utilitaries for Repology   -*- lexical-binding: t; -*-
+;;; repology-utils.el --- Utilities for Repology   -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2021  Free Software Foundation, Inc.
 
@@ -27,6 +27,21 @@
 ;; perform a raw HTTP request on a given URL.
 
 ;;; Code:
+
+(require 'seq)
+(require 'url)
+
+
+;;; Constants
+(defconst repology-package-all-fields
+  '(repo subrepo name srcname binname visiblename version origversion status
+         summary categories licenses maintainers www downloads)
+  "List of known package fields.")
+
+(defconst repology-package-all-status
+  '("newest" "devel" "unique" "outdated" "legacy" "rolling" "noscheme"
+    "incorrect" "untrusted" "ignored")
+  "List of known status values.")
 
 
 ;;; Packages
@@ -111,7 +126,7 @@ Return PACKAGE's repository internal name if the full name is unknown."
         (intern (format "repology-%s-status" status))
       ;; If package status list is not up-to-date, fall back to
       ;; `default' face.
-      (warn "Repology: Unknown package status: %S; Using `default' face" other)
+      (warn "Repology: Unknown package status: %S; Using `default' face" status)
       'default)))
 
 (defun repology-package-colorized-status (package)
@@ -201,6 +216,10 @@ following ones:
 
 
 ;;; Repositories
+(defconst repology-statistics-url "https://repology.org/repositories/statistics"
+  "URL for \"Statistics\" page in Repology website.
+It is used as a source for all known repositories.")
+
 (defvar repology--repositories nil
   "List of repositories known to Repology.
 The list is populated by `repology-list-repositories'.  Call that function

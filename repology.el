@@ -6,7 +6,7 @@
 ;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: web
 ;; Package-Requires: ((emacs "26.1"))
-;; Version: 0
+;; Version: 1.0.1
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -82,37 +82,23 @@
 ;;; Code:
 
 
+;;; Load Libraries
+(require 'json)
+(require 'seq)
+(require 'tabulated-list)
+(require 'url)
+
+(require 'repology-utils)
+(require 'repology-license)
+
+
 ;;; Upstream Constants
 (defconst repology-base-url "https://repology.org/api/v1/"
   "Base URL for Repology API.")
 
-(defconst repology-statistics-url "https://repology.org/repositories/statistics"
-  "URL for \"Statistics\" page in Repology website.
-It is used as a source for all known repositories.")
-
-(defconst repology-package-all-fields
-  '(repo subrepo name srcname binname visiblename version origversion status
-         summary categories licenses maintainers www downloads)
-  "List of known package fields.")
-
-(defconst repology-package-all-status
-  '("newest" "devel" "unique" "outdated" "legacy" "rolling" "noscheme"
-    "incorrect" "untrusted" "ignored")
-  "List of known status values.")
-
 (defconst repology-projects-hard-limit 200
   "Maximum number of projects Repology API can return.
 See URL `https://repology.org/api'.")
-
-
-;;; Load Libraries
-(require 'json)
-(require 'tabulated-list)
-(require 'url)
-
-;; These need to be loaded after upstream constants.
-(require 'repology-utils)
-(require 'repology-license)
 
 
 ;;; Configuration
