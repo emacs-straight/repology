@@ -149,7 +149,7 @@ The version string is emphasized according to PACKAGE's status."
 (defun repology-project-p (object)
   "Return t if OBJECT is a project."
   (pcase object
-    (`(,(pred symbolp) . ,packages)
+    (`(,(pred symbolp) . ,(and (pred listp) packages))
      (seq-every-p #'repology-package-p packages))
     (_ nil)))
 
@@ -164,6 +164,19 @@ The version string is emphasized according to PACKAGE's status."
   (unless (repology-project-p project)
     (user-error "No valid project provided"))
   (cdr project))
+
+(defun repology-project-create (name packages)
+  "Create a project object out of a NAME and a list of PACKAGES.
+NAME is a string or a symbol.  PACKAGES is a list of package objects."
+  (let* ((name-symbol
+          (pcase name
+            ((pred symbolp) name)
+            ((pred stringp) (intern name))
+            (_ (user-error "Invalid project name: %S" name))))
+         (project (cons name-symbol packages)))
+    (unless (repology-project-p project)
+      (user-error "Invalid packages value: %S" packages))
+    project))
 
 (defun repology-project-newest-version (project)
   "Return newest version string for packages in PROJECT, or nil."

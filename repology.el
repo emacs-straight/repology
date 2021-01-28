@@ -6,7 +6,7 @@
 ;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: web
 ;; Package-Requires: ((emacs "26.1"))
-;; Version: 1.0.1
+;; Version: 1.1.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -420,6 +420,7 @@ which see.  Information is returned as parsed JSON."
             (status
              (error "Cannot retrieve information: %S" status)))))))
 
+;;;###autoload
 (defun repology-lookup-project (name)
   "List packages for project NAME.
 NAME is a string.  Return a list of packages."
@@ -427,6 +428,7 @@ NAME is a string.  Return a list of packages."
       (format-message "Repology: Requesting information about `%s'..." name)
     (repology--get 'project name nil)))
 
+;;;###autoload
 (defun repology-search-projects (&rest filters)
   "Retrieve results of an advanced search in Repology.
 
@@ -513,6 +515,7 @@ according to the value of `repology-free-projects-only'."
                       (lambda (p) (eq t (repology-check-freedom p))))
                     result)))))
 
+;;;###autoload
 (defun repology-report-problems (repository)
   "List problems related to REPOSITORY.
 REPOSITORY is a string.  Return a list of problems."
@@ -714,6 +717,7 @@ or nil.  This is the default value for `repology-display-projects-columns'."
     ("Newest" repology-project-newest-version 12 repology-display-sort-versions)
     ("Outdated" repology-project-outdated-versions 30 nil)))
 
+;;;###autoload
 (defun repology-display-package (package)
   "Display PACKAGE as a tabulated list."
   (repology--make-display package
@@ -722,6 +726,7 @@ or nil.  This is the default value for `repology-display-projects-columns'."
                           #'repology--display-package-mode
                           #'repology--format-field-descriptors))
 
+;;;###autoload
 (defun repology-display-packages (packages)
   "Display PACKAGES as a tabulated list.
 PACKAGES is a list of packages, as returned by `repology-lookup-project'.
@@ -731,6 +736,7 @@ Columns are displayed according to `repology-display-packages-columns'."
                           #'repology--display-packages-mode
                           #'repology--format-package-descriptors))
 
+;;;###autoload
 (defun repology-display-projects (projects &optional selected)
   "Display PROJECTS as a tabulated list.
 
@@ -748,6 +754,7 @@ Columns are displayed according to `repology-display-projects-columns'."
                             #'repology--display-projects-mode
                             #'repology--format-project-descriptors)))
 
+;;;###autoload
 (defun repology-display-problems (problems)
   "Display PROBLEMS as a tabulated list.
 PROBLEMS is a list of problems, as returned by `repology-report-problems'.
