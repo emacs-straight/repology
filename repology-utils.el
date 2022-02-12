@@ -132,17 +132,20 @@ Return PACKAGE's repository internal name if the full name is unknown."
 (defun repology-package-colorized-status (package)
   "Return colorized status string for PACKAGE.
 The version string is emphasized according to PACKAGE's status.
-Return nil if PACKAGE has no status field."
+Return \"-\" if PACKAGE has no status field."
   (let ((status (repology-package-field package 'status)))
-    (and (stringp status)
-         (propertize status 'face (repology--package-status-face package)))))
+    (if (stringp status)
+        (propertize status 'face (repology--package-status-face package))
+      "-")))
 
 (defun repology-package-colorized-version (package)
   "Return colorized version string for PACKAGE.
-The version string is emphasized according to PACKAGE's status."
-  (propertize (repology-package-field package 'version)
-              'face
-              (repology--package-status-face package)))
+The version string is emphasized according to PACKAGE's status.
+Return \"-\" if PACKAGE has no version field."
+  (let ((version (repology-package-field package 'version)))
+    (if (stringp version)
+        (propertize version 'face (repology--package-status-face package))
+      "-")))
 
 
 ;;; Projects

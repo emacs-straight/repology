@@ -516,6 +516,35 @@ according to the value of `repology-free-projects-only'."
                     result)))))
 
 ;;;###autoload
+(defun repology-collect-projects (names)
+  "Collect a list of Repology projects by their name.
+
+NAMES is a list of project names, as strings.
+
+Project names can also be a list of strings. In that case, the
+project is named after the first element of the list and packages
+associated to subsequent names are merged into it, as if all were
+a single project.  This is useful when Repology has multiple names
+from the same project, or when you want the project to be
+displayed under a different name than Repology's.
+
+Return a list of Repology projects, in the order specified in
+NAMES."
+  (mapcar (lambda (name)
+            (let* ((project
+                    (pcase name
+                      (`(,project . ,_) project)
+                      (_ name)))
+                   (packages
+                    (cond
+                     ((listp name)
+                      (seq-mapcat #'repology-lookup-project name))
+                     (t
+                      (repology-lookup-project name)))))
+              (repology-project-create project packages)))
+          names))
+
+;;;###autoload
 (defun repology-report-problems (repository)
   "List problems related to REPOSITORY.
 REPOSITORY is a string.  Return a list of problems."
