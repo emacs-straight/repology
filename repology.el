@@ -162,6 +162,25 @@ problem argument.  Its return value is then turned into a string and displayed."
                   (const :tag "Sort" t)
                   (function :tag "Custom sort predicate")))))
 
+(defcustom repology-display-problems-sort-key nil
+  "Initial sort key used when displaying a list of problems.
+
+If nil, no additional sorting is performed.
+
+Otherwise, this should be a cons cell (NAME . FLIP).  NAME is
+a string matching one of the column names in
+`repology-display-problems-columns'.  FLIP, if non-nil, means to
+invert the resulting sort.
+
+If the key name doesn't match any column name, no sorting is
+initially done."
+  :type
+  '(choice
+    (const :tag "No sorting" nil)
+    (cons :tag "Sort key"
+          (string :tag "Column name")
+          (boolean :tag "Reversed?"))))
+
 (defcustom repology-display-packages-columns
   '(("Repository"
      repology-package-repository-full-name
@@ -202,6 +221,25 @@ You may also want to look into comparison functions suitable for SORT, such as
                   (const :tag "Sort" t)
                   (function :tag "Custom sort predicate")))))
 
+(defcustom repology-display-packages-sort-key nil
+  "Initial sort key used when displaying a list of packages.
+
+If nil, no additional sorting is performed.
+
+Otherwise, this should be a cons cell (NAME . FLIP).  NAME is
+a string matching one of the column names in
+`repology-display-packages-columns'.  FLIP, if non-nil, means to
+invert the resulting sort.
+
+If the key name doesn't match any column name, no sorting is
+initially done."
+  :type
+  '(choice
+    (const :tag "No sorting" nil)
+    (cons :tag "Sort key"
+          (string :tag "Column name")
+          (boolean :tag "Reversed?"))))
+
 (defcustom repology-display-projects-columns #'repology-display-projects-default
   "Columns format rules used to display a list of projects.
 
@@ -233,6 +271,25 @@ You may also want to look into comparison functions suitable for SORT, such as
                          (const :tag "Sort" t)
                          (function :tag "Custom sort predicate"))))
           (function :tag "Function describing columns")))
+
+(defcustom repology-display-projects-sort-key nil
+  "Initial sort key used when displaying a list of projects.
+
+If nil, no additional sorting is performed.
+
+Otherwise, this should be a cons cell (NAME . FLIP).  NAME is
+a string matching one of the column names in
+`repology-display-projects-columns'.  FLIP, if non-nil, means to
+invert the resulting sort.
+
+If the key name doesn't match any column name, no sorting is
+initially done."
+  :type
+  '(choice
+    (const :tag "No sorting" nil)
+    (cons :tag "Sort key"
+          (string :tag "Column name")
+          (boolean :tag "Reversed?"))))
 
 
 ;;; Faces
@@ -593,6 +650,21 @@ REPOSITORY is a string.  Return a list of problems."
   (repology-display-packages
    (repology-project-packages (tabulated-list-get-id))))
 
+(defun repology--display-sort-key (key-pair)
+  "Return initial sort key for current list.
+
+KEY-PAIR is the sort key to consider.  Return nil if KEY-PAIR is
+nil, or if the name of the column to sort initially does not
+exist.
+
+This function assumes `tabulated-list-format' is set already."
+  (pcase key-pair
+    (`(,name . ,_)
+     (let ((columns (mapcar #'car tabulated-list-format)))
+       (and (member name columns)
+            key-pair)))
+    (_ nil)))
+
 (define-derived-mode repology--display-package-mode tabulated-list-mode
   "Repology/Package"
   "Major mode used to display packages returned by Repology API.
@@ -606,6 +678,8 @@ REPOSITORY is a string.  Return a list of problems."
 \\{repology--display-packages-mode-map}"
   (setq tabulated-list-format
         (repology--columns-to-header repology-display-packages-columns))
+  (setq tabulated-list-sort-key
+        (repology--display-sort-key repology-display-packages-sort-key))
   (tabulated-list-init-header))
 
 (define-derived-mode repology--display-projects-mode tabulated-list-mode
@@ -614,6 +688,8 @@ REPOSITORY is a string.  Return a list of problems."
 \\{repology--display-projects-mode-map}"
   (setq tabulated-list-format
         (repology--columns-to-header repology-display-projects-columns))
+  (setq tabulated-list-sort-key
+        (repology--display-sort-key repology-display-projects-sort-key))
   (tabulated-list-init-header))
 
 (define-derived-mode repology--display-problems-mode tabulated-list-mode
@@ -622,6 +698,8 @@ REPOSITORY is a string.  Return a list of problems."
 \\{tabulated-list-mode-map}"
   (setq tabulated-list-format
         (repology--columns-to-header repology-display-problems-columns))
+  (setq tabulated-list-sort-key
+        (repology--display-sort-key repology-display-problems-sort-key))
   (tabulated-list-init-header))
 
 (defun repology--value-to-string (value)
