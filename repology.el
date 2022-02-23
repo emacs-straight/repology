@@ -6,7 +6,7 @@
 ;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: web
 ;; Package-Requires: ((emacs "26.1"))
-;; Version: 1.1.0
+;; Version: 1.2.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -64,6 +64,30 @@
 ;;                                my-ignored-projects)))
 ;;                 (repology-search-projects
 ;;                  :search "emacs" :inrepo "gnuguix" :outdated "on")))
+
+;; By default, the package trusts Repology's status values to report
+;; outdated packages.  However, this can introduce false positives.
+;; You can then set `repology-outdated-project-definition' and call
+;; `repology-filter-outdated-projects' to ignore those.
+
+;; For example, with the following set-up, I can look for every
+;; outdated Emacs packages and Asymptote package in GNU Guix, ignoring
+;; bogus versions for "emacs:circe", and "emacs:erlang" package
+;; altogether.  I also sort projects alphabetically.
+
+;;    (setq repology-outdated-project-definition
+;;          '(("emacs:circe" "<=2.11" nil)
+;;            ("emacs:erlang" nil nil))
+;;          repology-display-projects-sort-key "Project")
+;;
+;;    (let ((repo "gnuguix"))
+;;      (repology-display-projects
+;;       (repology-filter-outdated-projects
+;;           (append (repology-search-projects :search "emacs:" :outdated "on"
+;;                                             :inrepo repo)
+;;                   '("asymptote"))
+;;           repo)
+;;       repo))
 
 ;; Eventually, this library provides an interactive function with
 ;; a spartan interface wrapping this up: `repology'.  Since it builds
@@ -138,6 +162,55 @@ See `repology-check-freedom' for more information."
           (const :tag "Free and unknown projects" include-unknown)
           (const :tag "Every project" nil)))
 
+(defcustom repology-outdated-project-definition nil
+  "Determine how projects are considered as \"outdated\".
+
+This function affects `repology-filter-outdated-projects' function.
+
+When nil, a project is considered as \"outdated\" relatively to
+a repository whenever the corresponding package from that
+repository has the \"outdated\" status.
+
+Otherwise, it can be set to a list of masks.  A mask is a triplet
+
+  (NAME VERSION REPOSITORY)
+
+where NAME is a regexp or nil, VERSION is a string prefixed with
+either \"<\", \"<=\", \"=\", \">\" or \">=\", and REPOSITORY is
+a regexp or nil.
+
+Project's packages are matched against every non-nil criteria in
+the mask.  For example, the mask
+
+  (\"^Foo$\" \"=2\" nil)
+
+matches against project Foo at version 2 (or 2.0.0) only, in any
+repository.
+
+The mask
+
+  (nil nil \"BSD\")
+
+matches against any project from *BSD repositories.
+
+In this case, a project is \"outdated\" when the version of the
+package from the reference repository is older than the version
+of any non-masked package."
+  :type
+  '(choice
+    (const :tag "Use Repology packages status" nil)
+    (repeat :tag "Compare version with unmasked packages"
+     (list :tag "Mask"
+           (choice
+            (regexp :tag "Regexp matching project name")
+            (const :tag "Any project" nil))
+           (choice
+            (string :tag "Version comparison string")
+            (const :tag "Any version" nil))
+           (choice
+            (regexp :tag "Regexp matching repository name")
+            (const :tag "Any repository" nil))))))
+
 (defcustom repology-display-problems-columns
   `(("Project" effname 20 t)
     ("Package name" visiblename 20 t)
@@ -171,6 +244,9 @@ Otherwise, this should be a cons cell (NAME . FLIP).  NAME is
 a string matching one of the column names in
 `repology-display-problems-columns'.  FLIP, if non-nil, means to
 invert the resulting sort.
+
+Alternatively, it can be a string matching a valid column name.
+In that case, FLIP is considered as nil.
 
 If the key name doesn't match any column name, no sorting is
 initially done."
@@ -231,6 +307,9 @@ a string matching one of the column names in
 `repology-display-packages-columns'.  FLIP, if non-nil, means to
 invert the resulting sort.
 
+Alternatively, it can be a string matching a valid column name.
+In that case, FLIP is considered as nil.
+
 If the key name doesn't match any column name, no sorting is
 initially done."
   :type
@@ -281,6 +360,9 @@ Otherwise, this should be a cons cell (NAME . FLIP).  NAME is
 a string matching one of the column names in
 `repology-display-projects-columns'.  FLIP, if non-nil, means to
 invert the resulting sort.
+
+Alternatively, it can be a string matching a valid column name.
+In that case, FLIP is considered as nil.
 
 If the key name doesn't match any column name, no sorting is
 initially done."
@@ -578,7 +660,7 @@ according to the value of `repology-free-projects-only'."
 
 NAMES is a list of project names, as strings.
 
-Project names can also be a list of strings. In that case, the
+Project names can also be a list of strings.  In that case, the
 project is named after the first element of the list and packages
 associated to subsequent names are merged into it, as if all were
 a single project.  This is useful when Repology has multiple names
@@ -659,10 +741,11 @@ exist.
 
 This function assumes `tabulated-list-format' is set already."
   (pcase key-pair
-    (`(,name . ,_)
-     (let ((columns (mapcar #'car tabulated-list-format)))
+    ((or (and (pred stringp) name) `(,name . ,flip))
+     (let ((columns (mapcar #'car tabulated-list-format))
+           (flip (bound-and-true-p flip))) ;not defined when string
        (and (member name columns)
-            key-pair)))
+            (cons name flip))))
     (_ nil)))
 
 (define-derived-mode repology--display-package-mode tabulated-list-mode

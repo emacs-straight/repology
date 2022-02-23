@@ -147,6 +147,64 @@ Return \"-\" if PACKAGE has no version field."
         (propertize version 'face (repology--package-status-face package))
       "-")))
 
+(defun repology-filter-outdated-projects (projects repository)
+  "Filter outdated projects from PROJECTS list.
+
+PROJECTS is a list of Repology projects.  REPOSITORY is the name
+of the reference repository, as a string.
+
+Outdated projects are defined according to the value of the
+variable `repology-outdated-project-definiton', which see.
+
+Return a list of Repology projects."
+  (seq-filter
+   (lambda (project)
+     (let ((reference-package
+            (seq-find (lambda (p)
+                        (equal repository (repology-package-field p 'repo)))
+                      (repology-project-packages project))))
+       (cond
+        ((not reference-package)
+         (user-error "No package for project %S in repository %S"
+                     project repository))
+        ;; Default definition for outdated projects: trust Repology's
+        ;; status from reference package.
+        ((not repology-outdated-project-definition)
+         (equal "outdated" (repology-package-field reference-package 'status)))
+        (t
+         ;; Custom definition: compare versions of non-masked outdated
+         ;; or newest packages.
+         (let ((version (repology-package-field reference-package 'version))
+               ;; Ignore masks not applicable to the current project.
+               (masks
+                (seq-filter (let ((name (repology-project-name project)))
+                              (pcase-lambda (`(,name-re ,_ ,_))
+                                (or (not name-re)
+                                    (string-match name-re name))))
+                            repology-outdated-project-definition))
+               ;; Cache limiting the number of versions comparison.
+               (older nil))
+           (seq-some
+            (lambda (package)
+              (pcase (repology-package-field package 'status)
+                ;; Ignore reference package.
+                ((guard (equal package reference-package)) nil)
+                ;; Ignore packages with a dubious status.
+                ((or "devel" "ignored" "incorrect" "legacy" "noscheme" "rolling"
+                     "untrusted")
+                 nil)
+                ;; Ignore masked packages.
+                ((guard (repology--masked-package-p package masks))
+                 nil)
+                ;; Otherwise, compare versions.
+                (_
+                 (let ((v (repology-package-field package 'version)))
+                   (and (not (member v older))
+                        (prog1 (repology-version-< version v)
+                          (push v older)))))))
+            (repology-project-packages project)))))))
+   projects))
+
 
 ;;; Projects
 (defun repology-project-p (object)
@@ -158,14 +216,10 @@ Return \"-\" if PACKAGE has no version field."
 
 (defun repology-project-name (project)
   "Return PROJECT's name, as a string."
-  (unless (repology-project-p project)
-    (user-error "No valid project provided"))
   (symbol-name (car project)))
 
 (defun repology-project-packages (project)
   "Return list of packages associated to PROJECT."
-  (unless (repology-project-p project)
-    (user-error "No valid project provided"))
   (cdr project))
 
 (defun repology-project-create (name packages)
@@ -202,6 +256,38 @@ Versions are sorted in descending order."
                   outdated)
           ;; Return versions in decreasing order.
           (lambda (s1 s2) (repology-version-< s2 s1)))))
+
+(defun repology--masked-package-p (package masks)
+  "Return non-nil if PACKAGE is masked.
+PACKAGE is a Repology package. MASKS is a list of
+masks, as defined in `repology-outdated-project-definition'."
+  (seq-some
+   (pcase-lambda (`(,_ ,version ,repository-re))
+     (and (or (not version)
+              (progn
+                (unless (string-match
+                         (rx string-start
+                             (or "<=" "<" "=" ">" ">=")
+                             (zero-or-more space))
+                         version)
+                  (user-error "Invalid version comparison string: %S"
+                              version))
+                (let ((prefix (match-string 0 version))
+                      (base (substring version (match-end 0)))
+                      (package-version
+                       (repology-package-field package 'version)))
+                  (pcase prefix
+                    ("=" (and
+                          (not (repology-version-< base package-version))
+                          (not (repology-version-< package-version base))))
+                    ("<=" (not (repology-version-< base package-version)))
+                    (">=" (not (repology-version-< package-version base)))
+                    ("<" (repology-version-< package-version base))
+                    (">" (repology-version-< base package-version))))))
+          (or (not repository-re)
+              (string-match-p repository-re
+                              (repology-package-field package 'repo)))))
+   masks))
 
 
 ;;; Problems
@@ -348,44 +434,56 @@ the request."
   "Return version associated to string S.
 Version is a list of components (RANK . VALUE) suitable for comparison, with
 the function `repology-version-<'."
-  (let ((split nil))
-    ;; Explode string into numeric and alphabetic components.
-    ;; Intermediate SPLIT result is in reverse order.
-    (let ((regexp (rx (or (group (one-or-more digit)) (one-or-more alpha))))
-          (start 0))
-      (while (string-match regexp s start)
-        (let ((component (match-string 0 s)))
-          (push (if (match-beginning 1) ;numeric component?
-                    (string-to-number component)
-                  ;; Version comparison ignores case.
-                  (downcase component))
-                split))
-        (setq start (match-end 0))))
-    ;; Attach ranks to components.  NUMERIC-FLAG is used to catch
-    ;; trailing alphabetic components, which get a special rank.
-    ;; However, if there is no numeric component, no alphabetic
-    ;; component ever gets this rank, hence the initial value.
-    (let ((numeric-flag (seq-every-p #'stringp split))
-          (result nil))
-      (dolist (component split)
-        (let ((rank
-               (cond
-                ;; 0 gets "zero" (1) rank.
-                ((equal 0 component) 1)
-                ;; Other numeric components get "nonzero" (3) rank.
-                ((wholenump component) 3)
-                ;; Pre-release keywords get "pre_release" (0) rank.
-                ((member component repology-version-pre-keywords) 0)
-                ;; Post-release keywords get "post_release" (2) rank.
-                ((member component repology-version-post-keywords) 2)
-                ;; Alphabetic components after the last numeric
-                ;; component get the "letter_suffix" (4) rank.
-                ((not numeric-flag) 4)
-                ;; Any other alphabetic component is "pre_release".
-                (t 0))))
-          (when (wholenump component) (setq numeric-flag t))
-          (push (cons rank component) result)))
-      result)))
+  (let ((result nil)
+        (regexp (rx (one-or-more (any digit alpha))))
+        (start 0))
+    ;; Extract alphanumeric tokens. Then split all numeric and all
+    ;; alphabetic components apart.
+    (while (string-match regexp s start)
+      (setq start (match-end 0))
+      (let ((token (match-string 0 s))
+            (special-flag nil)
+            (i 0))
+        (while (string-match (rx (or (group (one-or-more digit))
+                                     (one-or-more alpha)))
+                             token
+                             i)
+          ;; Attach ranks to components.  NUMERIC-FLAG is used to catch
+          ;; trailing alphabetic components, which get a special rank.
+          ;; However, if there is no numeric component, no alphabetic
+          ;; component ever gets this rank, hence the initial value.
+          (push (cond
+                 ;; Numeric component: distinguish between 0 (rank 1)
+                 ;; and other value (rank 3).
+                 ((match-beginning 1)
+                  (let ((component (string-to-number (match-string 1 token))))
+                    (when (= i 0) (setq special-flag t))
+                    (if (= 0 component)
+                        repology-version-zero-component
+                      (cons 3 component))))
+                 ;; Special case: alphabetic component which follows
+                 ;; numeric component, and is not followed by another
+                 ;; numeric component.  If it is not a pre- or post-
+                 ;; keyword, give it rank 4.
+                 ((and special-flag
+                       (= (match-end 0) (length token)))
+                  (let ((component (downcase (match-string 0 token))))
+                    (cons (cond
+                           ((member component repology-version-pre-keywords) 0)
+                           ((member component repology-version-post-keywords) 2)
+                           (t 4))
+                          component)))
+                 ;; Now the special case is out of the way, rank is
+                 ;; either 2 (the component is a post-keyword), or 0.
+                 (t
+                  (let ((component (downcase (match-string 0 token))))
+                    (cons (if (member component repology-version-post-keywords)
+                              2
+                            0)
+                          component))))
+                result)
+          (setq i (match-end 0)))))
+    (nreverse result)))
 
 (defun repology-version-< (v1 v2)
   "Return t if version V1 is lower (older) than version V2.
