@@ -1,6 +1,6 @@
 ;;; repology-tests.el --- Test for Repology library  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022  Nicolas Goaziou
+;; Copyright (C) 2022  Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 

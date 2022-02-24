@@ -147,64 +147,6 @@ Return \"-\" if PACKAGE has no version field."
         (propertize version 'face (repology--package-status-face package))
       "-")))
 
-(defun repology-filter-outdated-projects (projects repository)
-  "Filter outdated projects from PROJECTS list.
-
-PROJECTS is a list of Repology projects.  REPOSITORY is the name
-of the reference repository, as a string.
-
-Outdated projects are defined according to the value of the
-variable `repology-outdated-project-definiton', which see.
-
-Return a list of Repology projects."
-  (seq-filter
-   (lambda (project)
-     (let ((reference-package
-            (seq-find (lambda (p)
-                        (equal repository (repology-package-field p 'repo)))
-                      (repology-project-packages project))))
-       (cond
-        ((not reference-package)
-         (user-error "No package for project %S in repository %S"
-                     project repository))
-        ;; Default definition for outdated projects: trust Repology's
-        ;; status from reference package.
-        ((not repology-outdated-project-definition)
-         (equal "outdated" (repology-package-field reference-package 'status)))
-        (t
-         ;; Custom definition: compare versions of non-masked outdated
-         ;; or newest packages.
-         (let ((version (repology-package-field reference-package 'version))
-               ;; Ignore masks not applicable to the current project.
-               (masks
-                (seq-filter (let ((name (repology-project-name project)))
-                              (pcase-lambda (`(,name-re ,_ ,_))
-                                (or (not name-re)
-                                    (string-match name-re name))))
-                            repology-outdated-project-definition))
-               ;; Cache limiting the number of versions comparison.
-               (older nil))
-           (seq-some
-            (lambda (package)
-              (pcase (repology-package-field package 'status)
-                ;; Ignore reference package.
-                ((guard (equal package reference-package)) nil)
-                ;; Ignore packages with a dubious status.
-                ((or "devel" "ignored" "incorrect" "legacy" "noscheme" "rolling"
-                     "untrusted")
-                 nil)
-                ;; Ignore masked packages.
-                ((guard (repology--masked-package-p package masks))
-                 nil)
-                ;; Otherwise, compare versions.
-                (_
-                 (let ((v (repology-package-field package 'version)))
-                   (and (not (member v older))
-                        (prog1 (repology-version-< version v)
-                          (push v older)))))))
-            (repology-project-packages project)))))))
-   projects))
-
 
 ;;; Projects
 (defun repology-project-p (object)
