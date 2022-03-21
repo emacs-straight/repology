@@ -6,7 +6,7 @@
 ;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Keywords: web
 ;; Package-Requires: ((emacs "26.1"))
-;; Version: 1.2.2
+;; Version: 1.2.3
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -702,8 +702,10 @@ Return a list of Repology projects."
                       (repology-project-packages project))))
        (cond
         ((not reference-package)
-         (user-error "No package for project %S in repository %S"
-                     project repository))
+         ;; Ignore projects when no reference package exists in
+         ;; REPOSITORY.
+         (warn "No package for project %S in repository %S" project repository)
+         t)
         ;; Default definition for outdated projects: trust Repology's
         ;; status from reference package.
         ((not repology-outdated-project-definition)

@@ -122,7 +122,7 @@ This list is populated with `repology--license-get-identifiers:gentoo'.")
   (or repology--license-identifiers:gentoo
       (with-temp-message "Repology: Fetching license identifiers for Gentoo..."
         (let ((request
-                (repology-request repology--license-identifiers-url:gentoo)))
+               (repology-request repology--license-identifiers-url:gentoo)))
           (pcase (plist-get request :reason)
             ("OK"
              (let ((identifiers nil))
@@ -140,7 +140,7 @@ This list is populated with `repology--license-get-identifiers:gentoo'.")
                          (delete (concat "@" category) identifiers))))
                (setq repology--license-identifiers:gentoo identifiers)))
             (_
-             (message "Repology: Cannot fetch Gentoo licenses.  \
+             (warn "Repology: Cannot fetch Gentoo licenses.  \
 Ignoring repository")
              nil))))))
 

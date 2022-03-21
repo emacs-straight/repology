@@ -326,36 +326,48 @@ Raise an error if REPOSITORY is unknown to Repology."
 ;;; Requests
 (defun repology-request (url &optional extra-headers)
   "Perform a raw HTTP request on URL.
+
 EXTRA-HEADERS is an assoc list of headers/contents to send with
-the request."
+the request.
+
+Return a property list with `:code', `:reason', `:header' and
+`:body' keywords. The value for `:reason' is either \"OK\", or
+a string explaining the issue."
   (let* ((url-request-method "GET")
-         (url-request-extra-headers extra-headers)
-         (process-buffer (url-retrieve-synchronously url t)))
-    (unwind-protect
-        (with-current-buffer process-buffer
-          (goto-char (point-min))
-          (let* ((status-line-regexp
-                  (rx bol
-                      (one-or-more (not (any " "))) " "
-                      (group (in "1-5") (= 2 digit)) " "
-                      (group (one-or-more (in "A-Z" "a-z" " ")))
-                      eol))
-                 (status
-                  (and (looking-at status-line-regexp)
-                       (list :code (string-to-number (match-string 1))
-                             :reason (match-string 2))))
-                 (header nil)
-                 (body nil))
-            (forward-line)
-            (while (looking-at (rx line-start (group (+? nonl)) ": "))
-              (push (match-string 1) header)
-              (push (buffer-substring (match-end 0) (line-end-position)) header)
-              (forward-line))
-            (forward-line)
-            (unless (eobp)
-              (setq body (buffer-substring (point) (point-max))))
-            (append status (list :header (nreverse header) :body body))))
-      (kill-buffer process-buffer))))
+         (url-request-extra-headers extra-headers))
+    (pcase (condition-case err
+               (url-retrieve-synchronously url t)
+             (error (error-message-string err)))
+      ('nil (list :reason "No data associated to request"))
+      ((and (pred stringp) reason) (list :reason reason))
+      ((and (pred bufferp) process-buffer)
+       (unwind-protect
+           (with-current-buffer process-buffer
+             (goto-char (point-min))
+             (let* ((status-line-regexp
+                     (rx bol
+                         (one-or-more (not (any " "))) " "
+                         (group (in "1-5") (= 2 digit)) " "
+                         (group (one-or-more (in "A-Z" "a-z" " ")))
+                         eol))
+                    (status
+                     (and (looking-at status-line-regexp)
+                          (list :code (string-to-number (match-string 1))
+                                :reason (match-string 2))))
+                    (header nil)
+                    (body nil))
+               (forward-line)
+               (while (looking-at (rx line-start (group (+? nonl)) ": "))
+                 (push (match-string 1) header)
+                 (push (buffer-substring (match-end 0) (line-end-position))
+                       header)
+                 (forward-line))
+               (forward-line)
+               (unless (eobp)
+                 (setq body (buffer-substring (point) (point-max))))
+               (append status (list :header (nreverse header) :body body))))
+         (kill-buffer process-buffer)))
+      (_ (error "This should not happen")))))
 
 
 ;;; Version Comparison
